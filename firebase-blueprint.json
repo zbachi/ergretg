@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user progress and settings for the 90-day challenge.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "currentDay": { "type": "integer", "description": "Current day in the 90-day challenge (1-90)" },
+        "niche": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "completedTasks": { "type": "array", "items": { "type": "string" }, "description": "List of task IDs completed for the current day" }
+      },
+      "required": ["uid", "currentDay"]
+    },
+    "VideoProject": {
+      "title": "Video Project",
+      "description": "A single video creation project from idea to post.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "topic": { "type": "string" },
+        "status": { "type": "string", "enum": ["idea", "script", "voiceover", "editing", "thumbnail", "posted"] },
+        "idea": {
+          "type": "object",
+          "properties": {
+            "title": { "type": "string" },
+            "hook": { "type": "string" },
+            "whyItWorks": { "type": "string" }
+          }
+        },
+        "script": { "type": "string" },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "views": { "type": "integer" },
+            "ctr": { "type": "number" },
+            "retention": { "type": "number" }
+          }
+        },
+        "feedback": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "topic", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile and progress"
+    },
+    "/videos/{videoId}": {
+      "schema": "VideoProject",
+      "description": "Video projects created by users"
+    }
+  }
+}
