@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { CheckCircle2, Circle, Trophy, ArrowRight, Zap, Loader2, Clock, ChevronRight, Sparkles, Youtube } from 'lucide-react';
+import { CheckCircle2, Circle, Trophy, ArrowRight, Zap, Loader2, Clock, ChevronRight, Sparkles, Youtube, Scissors } from 'lucide-react';
 import { db, auth } from '../lib/firebase';
 import { doc, onSnapshot, updateDoc, arrayUnion, arrayRemove, collection, addDoc, serverTimestamp, query, where, orderBy, limit } from 'firebase/firestore';
 import { UserProfile, VideoProject } from '../types';
+import { handleFirestoreError, OperationType } from '../lib/firebase';
 import { generateFullPackage } from '../services/gemini';
 import { cn } from '../lib/utils';
 
@@ -29,6 +30,12 @@ export default function Dashboard({ user, onStartVideo }: { user: UserProfile, o
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setRecentProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as VideoProject)));
+    }, (error) => {
+      console.error('Firestore Error in Dashboard:', error);
+      if (error.code === 'resource-exhausted') {
+        // Silently fail or alert? Let's alert if it's the main dashboard.
+        alert('Firestore Quota Exceeded. Recent projects could not be loaded.');
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -37,18 +44,26 @@ export default function Dashboard({ user, onStartVideo }: { user: UserProfile, o
     const isCompleted = user.completedTasks?.includes(taskId);
     const userRef = doc(db, 'users', user.uid);
     
-    await updateDoc(userRef, {
-      completedTasks: isCompleted ? arrayRemove(taskId) : arrayUnion(taskId)
-    });
+    try {
+      await updateDoc(userRef, {
+        completedTasks: isCompleted ? arrayRemove(taskId) : arrayUnion(taskId)
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'users/' + user.uid);
+    }
   };
 
   const handleLaunchPackage = async () => {
+    const topic = window.prompt('Enter a specific topic for your video package:', user.niche);
+    if (!topic) return;
+
     setLoading(true);
     try {
-      const pkg = await generateFullPackage(user.niche, user.niche);
+      const pkg = await generateFullPackage(topic, user.niche);
       await addDoc(collection(db, 'videos'), {
         userId: user.uid,
-        topic: user.niche,
+        topic: topic,
+        type: 'short',
         status: 'script',
         idea: pkg.idea,
         script: pkg.script,
@@ -58,8 +73,48 @@ export default function Dashboard({ user, onStartVideo }: { user: UserProfile, o
       onStartVideo();
     } catch (error) {
       console.error(error);
+      handleFirestoreError(error, OperationType.CREATE, 'videos');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCompleteDay = async () => {
+    if (user.completedTasks?.length !== DAILY_TASKS.length) return;
+    setUpdatingNiche(true);
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        currentDay: user.currentDay + 1,
+        completedTasks: []
+      });
+    } catch (error) {
+      console.error(error);
+      handleFirestoreError(error, OperationType.UPDATE, 'users/' + user.uid);
+    } finally {
+      setUpdatingNiche(false);
+    }
+  };
+
+  const [isEditingNiche, setIsEditingNiche] = useState(false);
+  const [newNiche, setNewNiche] = useState(user.niche || '');
+  const [updatingNiche, setUpdatingNiche] = useState(false);
+
+  const handleUpdateNiche = async () => {
+    if (!newNiche || newNiche === user.niche) {
+      setIsEditingNiche(false);
+      return;
+    }
+    setUpdatingNiche(true);
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, { niche: newNiche });
+      setIsEditingNiche(false);
+    } catch (error) {
+      console.error(error);
+      handleFirestoreError(error, OperationType.UPDATE, 'users/' + user.uid);
+    } finally {
+      setUpdatingNiche(false);
     }
   };
 
@@ -104,6 +159,16 @@ export default function Dashboard({ user, onStartVideo }: { user: UserProfile, o
               <span className="text-sm font-normal text-white/40 bg-white/5 px-3 py-1 rounded-full border border-white/10">
                 {user.completedTasks?.length || 0} / {DAILY_TASKS.length}
               </span>
+              {user.completedTasks?.length === DAILY_TASKS.length && (
+                <button
+                  onClick={handleCompleteDay}
+                  disabled={updatingNiche}
+                  className="ml-auto text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-bold transition-all flex items-center gap-2"
+                >
+                  {updatingNiche ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  Complete Day
+                </button>
+              )}
             </h3>
             <div className="space-y-4">
               {DAILY_TASKS.map((task) => {
@@ -155,11 +220,13 @@ export default function Dashboard({ user, onStartVideo }: { user: UserProfile, o
                       "w-10 h-10 rounded-xl flex items-center justify-center",
                       project.type === 'short' ? "bg-red-600/20 text-red-600" : 
                       project.type === 'long' ? "bg-blue-600/20 text-blue-600" : 
-                      project.type === 'ideation' ? "bg-purple-600/20 text-purple-600" : "bg-green-600/20 text-green-600"
+                      project.type === 'ideation' ? "bg-purple-600/20 text-purple-600" : 
+                      project.type === 'bending' ? "bg-purple-600/20 text-purple-600" : "bg-green-600/20 text-green-600"
                     )}>
                       {project.type === 'short' ? <Zap className="w-5 h-5" /> : 
                        project.type === 'long' ? <Youtube className="w-5 h-5" /> : 
-                       project.type === 'ideation' ? <Sparkles className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                       project.type === 'ideation' ? <Sparkles className="w-5 h-5" /> : 
+                       project.type === 'bending' ? <Scissors className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
                     </div>
                     <span className="text-[10px] text-white/20 font-bold uppercase tracking-widest">{project.createdAt?.toDate().toLocaleDateString()}</span>
                   </div>
@@ -200,12 +267,43 @@ export default function Dashboard({ user, onStartVideo }: { user: UserProfile, o
             </button>
           </div>
 
-          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8">
-            <h4 className="text-xl font-bold mb-4">Your Niche</h4>
-            <div className="inline-block px-4 py-2 bg-white/10 rounded-full border border-white/10 text-sm font-medium">
-              {user.niche || 'Not set'}
+          <div className="bg-white/5 border border-white/10 rounded-[2rem] p-8 space-y-4">
+            <div className="flex justify-between items-center">
+              <h4 className="text-xl font-bold">Your Niche</h4>
+              <button 
+                onClick={() => setIsEditingNiche(!isEditingNiche)}
+                className="text-xs font-bold text-red-500 uppercase tracking-widest hover:text-red-400 transition-colors"
+              >
+                {isEditingNiche ? 'Cancel' : 'Change'}
+              </button>
             </div>
-            <p className="mt-4 text-sm text-white/40">Your AI is currently optimized for this niche. You can change this in settings.</p>
+            
+            {isEditingNiche ? (
+              <div className="space-y-3">
+                <input 
+                  type="text"
+                  value={newNiche}
+                  onChange={(e) => setNewNiche(e.target.value)}
+                  placeholder="Enter new niche..."
+                  className="w-full bg-white/5 border border-white/10 px-4 py-3 rounded-xl outline-none focus:border-red-600/50 transition-colors text-sm"
+                  autoFocus
+                />
+                <button 
+                  onClick={handleUpdateNiche}
+                  disabled={updatingNiche || !newNiche}
+                  className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2"
+                >
+                  {updatingNiche ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Update Niche'}
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="inline-block px-4 py-2 bg-white/10 rounded-full border border-white/10 text-sm font-medium">
+                  {user.niche || 'Not set'}
+                </div>
+                <p className="text-sm text-white/40 leading-relaxed">Your AI is currently optimized for this niche. You can change this anytime.</p>
+              </>
+            )}
           </div>
         </div>
       </div>

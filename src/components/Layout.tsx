@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Video, BarChart2, LogOut, CheckCircle2 } from 'lucide-react';
+import { LayoutDashboard, Video, BarChart2, LogOut, CheckCircle2, Scissors } from 'lucide-react';
 import { auth, logout } from '../lib/firebase';
 import { cn } from '../lib/utils';
 
@@ -13,6 +13,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'ideation', label: 'Ideation', icon: CheckCircle2 },
+    { id: 'bending', label: 'Niche Bending', icon: Scissors },
     { id: 'videos', label: 'Library', icon: Video },
     { id: 'stats', label: 'Performance', icon: BarChart2 },
   ];

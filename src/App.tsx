@@ -8,11 +8,13 @@ import { auth, db } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
 import { UserProfile, VideoIdea } from './types';
+import { handleFirestoreError, OperationType } from './lib/firebase';
 import Login from './components/Login';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import VideoFlow from './components/VideoFlow';
 import Ideation from './components/Ideation';
+import NicheBending from './components/NicheBending';
 import PerformanceTracker from './components/PerformanceTracker';
 import { Loader2, Sparkles, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -38,6 +40,12 @@ export default function App() {
             setOnboarding(true);
           }
           setLoading(false);
+        }, (error) => {
+          console.error('Firestore Error in App:', error);
+          if (error.code === 'resource-exhausted') {
+            alert('Firestore Quota Exceeded. The free tier limit has been reached. Quota will reset tomorrow at midnight.');
+          }
+          setLoading(false);
         });
         return () => unsubUser();
       } else {
@@ -52,16 +60,20 @@ export default function App() {
   const handleOnboarding = async () => {
     if (!auth.currentUser || !niche) return;
     const userRef = doc(db, 'users', auth.currentUser.uid);
-    await setDoc(userRef, {
-      uid: auth.currentUser.uid,
-      displayName: auth.currentUser.displayName,
-      email: auth.currentUser.email,
-      currentDay: 1,
-      niche,
-      createdAt: serverTimestamp(),
-      completedTasks: []
-    });
-    setOnboarding(false);
+    try {
+      await setDoc(userRef, {
+        uid: auth.currentUser.uid,
+        displayName: auth.currentUser.displayName,
+        email: auth.currentUser.email,
+        currentDay: 1,
+        niche,
+        createdAt: serverTimestamp(),
+        completedTasks: []
+      });
+      setOnboarding(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'users/' + auth.currentUser.uid);
+    }
   };
 
   if (loading) {
@@ -117,6 +129,15 @@ export default function App() {
       {activeTab === 'dashboard' && user && <Dashboard user={user} onStartVideo={() => setActiveTab('videos')} />}
       {activeTab === 'ideation' && user && (
         <Ideation 
+          niche={user.niche} 
+          onGenerateScript={(idea) => {
+            setInitialIdea(idea);
+            setActiveTab('videos');
+          }} 
+        />
+      )}
+      {activeTab === 'bending' && user && (
+        <NicheBending 
           niche={user.niche} 
           onGenerateScript={(idea) => {
             setInitialIdea(idea);

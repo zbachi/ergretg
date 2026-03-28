@@ -1,23 +1,24 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Send, Loader2, ChevronRight, FileText, Zap, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { generateViralIdeation } from '../services/gemini';
+import { Sparkles, Send, Loader2, FileText, Zap, Scissors, CheckCircle2 } from 'lucide-react';
+import { generateNicheBendingIdeas } from '../services/gemini';
 import { db, auth, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { VideoIdea } from '../types';
 import { cn } from '../lib/utils';
 
-export default function Ideation({ niche: initialNiche, onGenerateScript }: { niche: string, onGenerateScript: (idea: VideoIdea) => void }) {
-  const [input, setInput] = useState('');
+export default function NicheBending({ niche: initialNiche, onGenerateScript }: { niche: string, onGenerateScript: (idea: VideoIdea) => void }) {
+  const [topic, setTopic] = useState('');
+  const [format, setFormat] = useState('');
   const [currentNiche, setCurrentNiche] = useState(initialNiche);
   const [loading, setLoading] = useState(false);
   const [ideas, setIdeas] = useState<(VideoIdea & { saved?: boolean })[]>([]);
 
   const handleGenerate = async () => {
-    if (!input || !currentNiche) return;
+    if (!topic || !format || !currentNiche) return;
     setLoading(true);
     try {
-      const result = await generateViralIdeation(input, currentNiche);
+      const result = await generateNicheBendingIdeas(topic, format, currentNiche);
       setIdeas(result.map(idea => ({ ...idea, saved: false })));
     } catch (error) {
       console.error(error);
@@ -31,7 +32,7 @@ export default function Ideation({ niche: initialNiche, onGenerateScript }: { ni
       await addDoc(collection(db, 'videos'), {
         userId: auth.currentUser?.uid,
         topic: idea.title,
-        type: 'ideation',
+        type: 'bending',
         status: 'idea',
         idea: idea,
         niche: currentNiche,
@@ -48,47 +49,55 @@ export default function Ideation({ niche: initialNiche, onGenerateScript }: { ni
   return (
     <div className="max-w-5xl mx-auto space-y-12">
       <div className="text-center space-y-4">
-        <h2 className="text-5xl font-bold tracking-tight">Viral Ideation</h2>
+        <h2 className="text-5xl font-bold tracking-tight">Niche Bending</h2>
         <p className="text-white/40 text-xl max-w-2xl mx-auto">
-          Input a topic, script, or rough idea. We'll find the unique angle to escape the conflict radius.
+          Take a popular topic or format and "bend" it perfectly into your target niche.
         </p>
       </div>
 
-      <div className="space-y-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative group">
-            <div className="absolute -inset-1 bg-gradient-to-r from-red-600 to-orange-600 rounded-[2rem] blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
-            <div className="relative bg-[#111] border border-white/10 rounded-[2rem] p-8 flex gap-4">
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Paste a topic, script, or video idea..."
-                className="flex-1 bg-transparent border-none focus:ring-0 text-xl placeholder:text-white/10 min-h-[120px] resize-none"
+      <div className="relative group">
+        <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-blue-600 rounded-[2rem] blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+        <div className="relative bg-[#111] border border-white/10 rounded-[2rem] p-8 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-white/40 ml-4">Original Topic / Idea</label>
+              <input 
+                type="text" 
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="e.g. The 10 Richest People"
+                className="w-full bg-white/5 border border-white/10 px-8 py-6 rounded-[2rem] outline-none focus:border-purple-600/50 transition-colors text-xl"
               />
             </div>
-          </div>
-          
-          <div className="w-full md:w-72 space-y-4">
-            <div className="bg-white/5 border border-white/10 rounded-[2rem] p-6 space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-white/40 ml-2">Target Niche</label>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-white/40 ml-4">Target Format</label>
               <input 
-                type="text"
+                type="text" 
+                value={format}
+                onChange={(e) => setFormat(e.target.value)}
+                placeholder="e.g. Documentary, Skit, Vlog"
+                className="w-full bg-white/5 border border-white/10 px-8 py-6 rounded-[2rem] outline-none focus:border-purple-600/50 transition-colors text-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-white/40 ml-4">Target Niche</label>
+              <input 
+                type="text" 
                 value={currentNiche}
                 onChange={(e) => setCurrentNiche(e.target.value)}
-                placeholder="e.g. AI News"
-                className="w-full bg-white/5 border border-white/10 px-4 py-3 rounded-xl outline-none focus:border-red-600/50 transition-colors text-sm"
+                placeholder="e.g. Cooking"
+                className="w-full bg-white/5 border border-white/10 px-8 py-6 rounded-[2rem] outline-none focus:border-purple-600/50 transition-colors text-xl"
               />
             </div>
-            
-            <button
-              onClick={handleGenerate}
-              disabled={loading || !input || !currentNiche}
-              className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white p-6 rounded-[2rem] transition-all shadow-xl flex items-center justify-center gap-3 font-bold"
-            >
-              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
-              {loading ? 'Thinking...' : 'Generate'}
-            </button>
           </div>
+          <button
+            onClick={handleGenerate}
+            disabled={loading || !topic || !format || !currentNiche}
+            className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white py-6 rounded-[2rem] font-bold flex items-center justify-center gap-3 transition-all shadow-xl text-xl"
+          >
+            {loading ? <Loader2 className="w-8 h-8 animate-spin" /> : <Scissors className="w-8 h-8" />}
+            {loading ? 'Bending Topic...' : 'Bend Topic to My Niche'}
+          </button>
         </div>
       </div>
 
@@ -106,14 +115,14 @@ export default function Ideation({ niche: initialNiche, onGenerateScript }: { ni
                 <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-12">
                   <div className="space-y-4 flex-1">
                     <div className="flex items-center gap-4">
-                      <div className="px-4 py-1.5 bg-red-600/20 text-red-500 rounded-full text-sm font-bold tracking-widest uppercase">
+                      <div className="px-4 py-1.5 bg-purple-600/20 text-purple-500 rounded-full text-sm font-bold tracking-widest uppercase">
                         Viral Score: {idea.viralScore}%
                       </div>
                       <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden flex-1 max-w-[200px]">
                         <motion.div 
                           initial={{ width: 0 }}
                           animate={{ width: `${idea.viralScore}%` }}
-                          className="h-full bg-red-600"
+                          className="h-full bg-purple-600"
                         />
                       </div>
                     </div>
@@ -148,34 +157,20 @@ export default function Ideation({ niche: initialNiche, onGenerateScript }: { ni
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                   <div className="space-y-8">
                     <div className="space-y-4">
-                      <div className="flex items-center gap-2 text-red-500 font-bold uppercase tracking-widest text-xs">
-                        <Zap className="w-4 h-4" />
-                        Semantic ID Analysis
-                      </div>
-                      <div className="p-6 bg-white/5 rounded-3xl text-white/60 leading-relaxed whitespace-pre-wrap italic">
-                        {idea.semanticAnalysis}
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 text-red-500 font-bold uppercase tracking-widest text-xs">
-                        <AlertCircle className="w-4 h-4" />
-                        Conflict Radius Check
-                      </div>
-                      <div className="p-6 bg-white/5 rounded-3xl text-white/60 leading-relaxed whitespace-pre-wrap italic">
-                        {idea.conflictRadiusCheck}
-                      </div>
+                      <div className="text-white/40 font-bold uppercase tracking-widest text-xs">The Hook</div>
+                      <p className="text-xl font-medium text-white/90 leading-relaxed">"{idea.hook}"</p>
                     </div>
                   </div>
 
                   <div className="space-y-8">
                     <div className="space-y-4">
-                      <div className="text-white/40 font-bold uppercase tracking-widest text-xs">The Hook</div>
-                      <p className="text-xl font-medium text-white/90 leading-relaxed">"{idea.hook}"</p>
-                    </div>
-                    <div className="space-y-4">
-                      <div className="text-white/40 font-bold uppercase tracking-widest text-xs">Why it works</div>
-                      <p className="text-white/60 leading-relaxed">{idea.whyItWorks}</p>
+                      <div className="flex items-center gap-2 text-purple-500 font-bold uppercase tracking-widest text-xs">
+                        <Zap className="w-4 h-4" />
+                        How the "Bend" Works
+                      </div>
+                      <div className="p-6 bg-white/5 rounded-3xl text-white/60 leading-relaxed whitespace-pre-wrap italic">
+                        {idea.whyItWorks}
+                      </div>
                     </div>
                   </div>
                 </div>

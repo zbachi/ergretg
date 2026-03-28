@@ -1,5 +1,5 @@
 export type VideoStatus = 'idea' | 'script' | 'voiceover' | 'editing' | 'thumbnail' | 'posted';
-export type VideoType = 'long' | 'short' | 'extractor' | 'ideation';
+export type VideoType = 'long' | 'short' | 'extractor' | 'ideation' | 'bending';
 
 export interface VideoIdea {
   title: string;
@@ -30,6 +30,13 @@ export interface VideoProject {
   feedback?: string;
   createdAt: any;
   thumbnailConcept?: string;
+  imagePrompts?: string;
+  videoPackage?: {
+    titles: string[];
+    description: string;
+    tags: string[];
+    thumbnailPrompt: string;
+  };
 }
 
 export interface UserProfile {
